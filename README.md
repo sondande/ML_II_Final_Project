@@ -4,6 +4,8 @@
 Onboarding:
 Create a virtual environment and install required packages with the requirements.txt file
 
+**Please Use Python Version: Python 3.12.4**
+
 ```bash
 python3 -m venv venv
 source venv/bin/activate
