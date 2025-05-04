@@ -30,4 +30,11 @@ streamlit run app.py
 - `run_bmi_detector_app.sh`: The shell script that runs the Streamlit app with all commands needed to run the app.
 - `app.py`: The main file that runs the Streamlit app.
 - `bmi_multimodal_training.py`: The file that contains the training code for the BMI detector.
-- 
+
+## View tensorboard
+
+Run the following command to view the tensor board when training the model
+
+```python 
+tensorboard --logdir runs/bmi_experiment
+```
