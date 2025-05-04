@@ -19,12 +19,31 @@ except AttributeError:
 else:
     ssl._create_default_https_context = _create_unverified_https_context
 
+# Global Configurations
 IMAGE_DIR = "data/Images"
-existing_image_files = os.listdir(IMAGE_DIR)
+CSV_FILE = "data/data.csv"
+BATCH_SIZE = 32
+NUM_EPOCHS = 30
+LR = 1e-4
 
 # ------- Dataset Definition -------
 class BMIDataset(Dataset):
+    """
+    Class to load and preprocess the BMI dataset.
+    This class handles loading images, applying transformations, and
+    returning the corresponding labels
+    """
     def __init__(self, csv_file, image_dir, transform=None, mtcnn=None, split='train'):
+        """
+        Initialize the dataset with the CSV file and image directory.
+
+        Args:
+            csv_file (str): Path to the CSV file containing image names and labels.
+            image_dir (str): Directory where images are stored.
+            transform (callable, optional): Optional transform to be applied on a sample.
+            mtcnn (MTCNN, optional): MTCNN face detector for preprocessing.
+            split (str): 'train' or 'test' to specify the dataset split.
+        """
         self.df = pd.read_csv(csv_file).drop(columns=["Unnamed: 0"])
         self.df = self.df[self.df["name"].isin(existing_image_files)]
         if split == 'train':
@@ -55,6 +74,10 @@ class BMIDataset(Dataset):
 
 # ------- Model Definition -------
 class BMIModel(nn.Module):
+    """
+    This class defines the BMI prediction model.
+    It uses a pre-trained ResNet18 backbone for feature extraction
+    """
     def __init__(self, num_gender_classes=2, dropout_p=0.5):
         super().__init__()
         backbone = models.resnet18(pretrained=True)
@@ -109,12 +132,16 @@ def evaluate(model, dataloader, device):
 
 # ------- Main Training Script -------
 if __name__ == "__main__":
-    # Configuration
-    CSV_FILE = "data/data.csv"
-    IMAGE_DIR = "data/Images"
-    BATCH_SIZE = 32
-    NUM_EPOCHS = 30
-    LR = 1e-4
+    # Check for required directories and files
+    if not os.path.exists("data"):
+        raise FileNotFoundError("Data directory does not exist.")
+    if not os.path.exists(IMAGE_DIR):
+        raise FileNotFoundError(f"Images directory '{IMAGE_DIR}' does not exist.")
+    if not os.path.exists(CSV_FILE):
+        raise FileNotFoundError(f"CSV file in directory '{CSV_FILE}' does not exist.")
+
+    # Extract list of existing image files to prevent loading image conflicts
+    existing_image_files = os.listdir(IMAGE_DIR)
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Initialize TensorBoard & Weights & Biases
@@ -128,7 +155,7 @@ if __name__ == "__main__":
     # Setup face detector
     mtcnn = MTCNN(image_size=224, margin=0, keep_all=False, device=DEVICE)
 
-    # Data transforms
+    # Data transformations to help the model better identify nuance patterns 
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.RandomHorizontalFlip(),
@@ -170,7 +197,7 @@ if __name__ == "__main__":
             'val_rmse': val_rmse
         })
 
-        # Bias/Fairness checks by gender
+        # Bias/Fairness checks by gender (based off number of gender classifications defined when training MTCNN)
         for gender_label, gender_name in enumerate(['Male', 'Female']):
             mask = genders == gender_label
             if mask.sum() > 0:
