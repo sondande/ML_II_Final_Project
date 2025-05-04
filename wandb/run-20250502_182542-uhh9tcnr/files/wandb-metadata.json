@@ -1,0 +1,16 @@
+{
+  "os": "macOS-15.3.1-arm64-arm-64bit",
+  "python": "CPython 3.12.4",
+  "startedAt": "2025-05-02T23:25:42.765221Z",
+  "program": "/Users/sagana/Documents/UChicago/Spring 2025/Machine Learning II/Assignments/ML_II_Final_Project/bmi_multimodal_training.py",
+  "codePath": "bmi_multimodal_training.py",
+  "git": {
+    "remote": "https://github.com/sondande/ML_II_Final_Project.git",
+    "commit": "6a87063a47dd0e8abe7b4378941cee5a3d636191"
+  },
+  "email": "sondande@uchicago.edu",
+  "root": "/Users/sagana/Documents/UChicago/Spring 2025/Machine Learning II/Assignments/ML_II_Final_Project",
+  "host": "Saganas-MacBook-Pro.local",
+  "executable": "/Users/sagana/Documents/UChicago/Spring 2025/Machine Learning II/Assignments/ML_II_Final_Project/venv/bin/python",
+  "codePathLocal": "bmi_multimodal_training.py"
+}
