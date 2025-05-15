@@ -160,3 +160,9 @@ cython_debug/
 #.idea/
 
 data/
+
+ml_env/
+
+saved_models/
+
+wandb/
