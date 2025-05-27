@@ -161,6 +161,8 @@ cython_debug/
 
 data/
 
+evaluation_results/
+
 ml_env/
 
 saved_models/
