@@ -2,6 +2,7 @@ import os
 import ssl
 import pandas as pd
 import numpy as np
+from datetime import datetime
 from PIL import Image
 import torch
 import torch.nn as nn
@@ -142,11 +143,18 @@ if __name__ == "__main__":
 
     # Extract list of existing image files to prevent loading image conflicts
     existing_image_files = os.listdir(IMAGE_DIR)
-    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+    # DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    DEVICE = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
+    print(f"Using device: {DEVICE}")
+    # Set random seed for reproducibility
+    torch.manual_seed(42)
+    np.random.seed(42)
+    
+    date_value = datetime.now().strftime('%Y%m%d_%H%M%S')
+    
     # Initialize TensorBoard & Weights & Biases
-    writer = SummaryWriter(log_dir="runs/bmi_experiment")
-    wandb.init(project="bmi_multimodal", config={
+    writer = SummaryWriter(log_dir=f"runs/bmi_experiment_{date_value}")
+    wandb.init(project=f"bmi_multimodal_{date_value}", config={
         "batch_size": BATCH_SIZE,
         "lr": LR,
         "epochs": NUM_EPOCHS
@@ -156,18 +164,28 @@ if __name__ == "__main__":
     mtcnn = MTCNN(image_size=224, margin=0, keep_all=False, device=DEVICE)
 
     # Data transformations to help the model better identify nuance patterns 
-    transform = transforms.Compose([
+    train_transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.RandomHorizontalFlip(),
+        transforms.RandomAffine(degrees=5, translate=(0.02,0.02),
+                        scale=(0.95,1.05), shear=2),
+        transforms.RandomApply([transforms.GaussianBlur(3)], p=0.1),
         transforms.ColorJitter(brightness=0.2, contrast=0.2),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406],
                              [0.229, 0.224, 0.225])
     ])
 
+    val_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485,0.456,0.406],
+                    std=[0.229,0.224,0.225]),
+    ])
+
     # Datasets & loaders
-    train_dataset = BMIDataset(CSV_FILE, IMAGE_DIR, transform, mtcnn, split='train')
-    val_dataset = BMIDataset(CSV_FILE, IMAGE_DIR, transform, mtcnn, split='test')
+    train_dataset = BMIDataset(CSV_FILE, IMAGE_DIR, train_transform, mtcnn, split='train')
+    val_dataset = BMIDataset(CSV_FILE, IMAGE_DIR, val_transform, mtcnn, split='test')
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
 
@@ -214,7 +232,7 @@ if __name__ == "__main__":
         print(f"Epoch {epoch}/{NUM_EPOCHS} - Train Loss: {train_loss:.4f}  Val MAE: {val_mae:.4f}  Val RMSE: {val_rmse:.4f}")
         if val_mae < best_mae:
             best_mae = val_mae
-            torch.save(model.state_dict(), "best_bmi_multimodal_model.pth")
+            torch.save(model.state_dict(), f"best_bmi_multimodal_model_{date_value}.pth")
             print("Best model saved.")
 
     writer.close()

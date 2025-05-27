@@ -166,3 +166,5 @@ ml_env/
 saved_models/
 
 wandb/
+
+.DS_Store
