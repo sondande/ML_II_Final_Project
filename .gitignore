@@ -171,4 +171,12 @@ wandb/
 
 evaluation_results/
 
-Final_Project_App/streamlit-bmi/
+./Final_Project_App/streamlit-bmi/
+Final_Project_App/streamlit-bmi/bin/activate
+/Final_Project_App/streamlit-bmi
+Final_Project_App/streamlit-bmi/pyvenv.cfg
+Final_Project_App/streamlit-bmi/bin/pip3
+Final_Project_App/streamlit-bmi/bin/pip
+Final_Project_App/streamlit-bmi/bin/activate.fish
+Final_Project_App/streamlit-bmi/bin/activate.csh
+Final_Project_App/streamlit-bmi/bin/activate
