@@ -170,3 +170,5 @@ wandb/
 .DS_Store
 
 evaluation_results/
+
+Final_Project_App/streamlit-bmi/
