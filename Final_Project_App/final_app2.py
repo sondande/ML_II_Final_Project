@@ -38,7 +38,7 @@ fair_model.fc = torch.nn.Linear(fair_model.fc.in_features, 18)
 fair_model.load_state_dict(torch.load("Final_Project_App/saved_models/res34_fair_align_multi_4_20190809.pt", map_location=DEVICE))
 fair_model = fair_model.to(DEVICE).eval()
 
-xgb_model = load("saved_models/best_bmi_model_xgboost.joblib")
+xgb_model = load("Final_Project_App/saved_models/best_bmi_model_xgboost.joblib")
 
 # ─── LABELS AND TRANSFORMS ───────────────────────────────────────────────
 race_labels = ['White', 'Black', 'Latino_Hispanic', 'East Asian', 'Southeast Asian', 'Indian', 'Middle Eastern']
