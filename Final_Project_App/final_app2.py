@@ -212,5 +212,8 @@ else:
         key="bmi-live-interval",
         video_processor_factory=FaceAndBMIPredictor,
         media_stream_constraints={"video": True, "audio": False},
-        async_processing=True
+        async_processing=True,
+        rtc_configuration={  # Add this line
+            "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+        }
     )
