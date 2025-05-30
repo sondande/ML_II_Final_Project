@@ -1,11 +1,11 @@
 streamlit==1.33.0
 streamlit-webrtc==0.45.1
-facenet-pytorch==2.5.3
 torch==2.2.1
 torchvision==0.17.1
+facenet-pytorch==2.5.3
 opencv-python-headless==4.9.0.80
 numpy==1.26.4
 Pillow==10.2.0
 joblib==1.5.1
 av==14.4.0
-xgboost==2.0.3
+mediapipe==0.10.9

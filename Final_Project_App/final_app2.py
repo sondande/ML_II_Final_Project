@@ -12,6 +12,7 @@ import av
 import time
 import sys
 import asyncio
+import mediapipe as mp
 
 # ─── macOS EVENT LOOP FIX ───────────────────────────────────────────────
 if sys.platform.startswith("darwin"):
@@ -25,7 +26,7 @@ DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
 # ─── STREAMLIT TITLE ─────────────────────────────────────────────────────
 st.title("📸 Real-Time BMI Prediction")
-st.write("Facial bounding boxes and BMI estimation shown in real time.")
+st.write("Facial landmarks and BMI estimation shown in real time.")
 
 mode = st.radio("Select input mode:", ["Webcam", "Upload Image"])
 
@@ -35,10 +36,10 @@ embedding_model = InceptionResnetV1(pretrained='vggface2').eval().to(DEVICE)
 
 fair_model = resnet34(weights=None)
 fair_model.fc = torch.nn.Linear(fair_model.fc.in_features, 18)
-fair_model.load_state_dict(torch.load("Final_Project_App/saved_models/res34_fair_align_multi_4_20190809.pt", map_location=DEVICE))
+fair_model.load_state_dict(torch.load("FairFace/fair_face_models/res34_fair_align_multi_4_20190809.pt", map_location=DEVICE))
 fair_model = fair_model.to(DEVICE).eval()
 
-xgb_model = load("Final_Project_App/saved_models/best_bmi_model_xgboost.joblib")
+xgb_model = load("saved_models/best_bmi_model_xgboost.joblib")
 
 # ─── LABELS AND TRANSFORMS ───────────────────────────────────────────────
 race_labels = ['White', 'Black', 'Latino_Hispanic', 'East Asian', 'Southeast Asian', 'Indian', 'Middle Eastern']
@@ -53,12 +54,25 @@ inference_transform = transforms.Compose([
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
-def process_image(pil_img):
-    boxes, _ = mtcnn.detect(pil_img)
-    if boxes is None or len(boxes) == 0:
-        return None, "No face detected.", None
+def extract_landmarks(image_np):
+    mp_face = mp.solutions.face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1)
+    results = mp_face.process(image_np)
+    mp_face.close()
+    if not results.multi_face_landmarks:
+        return None
+    face_landmarks = results.multi_face_landmarks[0]
+    x_coords = [int(lm.x * image_np.shape[1]) for lm in face_landmarks.landmark]
+    y_coords = [int(lm.y * image_np.shape[0]) for lm in face_landmarks.landmark]
+    return x_coords, y_coords
 
-    x1, y1, x2, y2 = boxes[0].astype(int)
+def process_image(pil_img):
+    img_rgb = np.array(pil_img)
+    coords = extract_landmarks(img_rgb)
+    if coords is None:
+        return None, "No face or landmarks detected.", None
+    x_coords, y_coords = coords
+    x1, y1, x2, y2 = min(x_coords), min(y_coords), max(x_coords), max(y_coords)
+
     face_crop = pil_img.crop((x1, y1, x2, y2))
     face_tensor = inference_transform(face_crop).unsqueeze(0).to(DEVICE)
 
@@ -81,12 +95,7 @@ def process_image(pil_img):
     if age_idx in age_keep:
         age_onehot[age_keep.index(age_idx)] = 1
 
-    # Placeholder landmark features since dlib is removed
-    landmark_features = np.zeros(11)
-
-    # Annotate image
-    img_bgr = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-    cv2.rectangle(img_bgr, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    landmark_features = np.array(x_coords[:5] + y_coords[:5])
 
     full_features = np.concatenate([
         embedding.cpu().numpy().squeeze(),
@@ -97,8 +106,13 @@ def process_image(pil_img):
     ]).reshape(1, -1)
 
     bmi = xgb_model.predict(full_features)[0]
-    result_text = f"BMI: {bmi:.2f}"
 
+    img_bgr = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+    for x, y in zip(x_coords, y_coords):
+        cv2.circle(img_bgr, (x, y), 1, (0, 255, 255), -1)
+    cv2.rectangle(img_bgr, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+    result_text = f"BMI: {bmi:.2f}"
     annotated_img = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
     return bmi, result_text, annotated_img
 
@@ -111,7 +125,7 @@ if mode == "Upload Image":
         if bmi is None:
             st.warning(result_text)
         else:
-            st.image(annotated_img, caption="Detected face", use_column_width=True)
+            st.image(annotated_img, caption="Detected face and landmarks", use_column_width=True)
             st.success(result_text)
 
 else:
@@ -120,18 +134,22 @@ else:
             self.last_prediction = None
             self.last_timestamp = 0
             self.prediction_interval = 5
+            self.face_mesh = mp.solutions.face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1)
 
         def recv(self, frame):
             img = frame.to_ndarray(format="bgr24")
-            pil_img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            results = self.face_mesh.process(img_rgb)
 
-            boxes, _ = mtcnn.detect(pil_img)
-            if boxes is None or len(boxes) == 0:
+            if not results.multi_face_landmarks:
                 return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-            x1, y1, x2, y2 = boxes[0].astype(int)
-            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            face_landmarks = results.multi_face_landmarks[0]
+            x_coords = [int(lm.x * img.shape[1]) for lm in face_landmarks.landmark]
+            y_coords = [int(lm.y * img.shape[0]) for lm in face_landmarks.landmark]
+            x1, y1, x2, y2 = min(x_coords), min(y_coords), max(x_coords), max(y_coords)
 
+            pil_img = Image.fromarray(img_rgb)
             face_crop = pil_img.crop((x1, y1, x2, y2))
             face_tensor = inference_transform(face_crop).unsqueeze(0).to(DEVICE)
 
@@ -154,8 +172,7 @@ else:
             if age_idx in age_keep:
                 age_onehot[age_keep.index(age_idx)] = 1
 
-            # Placeholder landmark features
-            landmark_features = np.zeros(11)
+            landmark_features = np.array(x_coords[:5] + y_coords[:5])
 
             current_time = time.time()
             if current_time - self.last_timestamp > self.prediction_interval:
@@ -172,6 +189,10 @@ else:
             if self.last_prediction is not None:
                 cv2.putText(img, f"BMI: {self.last_prediction:.2f}", (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
+
+            for x, y in zip(x_coords, y_coords):
+                cv2.circle(img, (x, y), 1, (0, 255, 255), -1)
+            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
