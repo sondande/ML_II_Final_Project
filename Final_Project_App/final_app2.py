@@ -133,3 +133,84 @@ if mode == "Upload Image":
         else:
             st.image(annotated_img, caption="Processed Image")
             st.success(result_text)
+else:
+    class FaceAndBMIPredictor(VideoTransformerBase):
+        def __init__(self):
+            self.last_prediction = None
+            self.last_timestamp = 0
+            self.prediction_interval = 5
+
+        def recv(self, frame):
+            img = frame.to_ndarray(format="bgr24")
+            pil_img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+
+            boxes, _ = mtcnn.detect(pil_img)
+            if boxes is None or len(boxes) == 0:
+                return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+            x1, y1, x2, y2 = boxes[0].astype(int)
+            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+            face_crop = pil_img.crop((x1, y1, x2, y2))
+            face_tensor = inference_transform(face_crop).unsqueeze(0).to(DEVICE)
+
+            with torch.no_grad():
+                fair_out = fair_model(face_tensor).cpu().numpy().squeeze()
+                embedding = embedding_model(face_tensor)
+
+            race_idx = np.argmax(fair_out[:7])
+            gender_idx = np.argmax(fair_out[7:9])
+            age_idx = np.argmax(fair_out[9:18])
+
+            race_onehot = np.zeros(4)
+            if race_idx in race_keep:
+                race_onehot[race_keep.index(race_idx)] = 1
+
+            gender_onehot = np.zeros(2)
+            gender_onehot[gender_idx] = 1
+
+            age_onehot = np.zeros(6)
+            if age_idx in age_keep:
+                age_onehot[age_keep.index(age_idx)] = 1
+
+            img_rgb = np.array(pil_img)
+            dets = detector(img_rgb, 1)
+            if len(dets) == 0:
+                return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+            shape = predictor(img_rgb, dets[0])
+            landmark_features = get_landmark_features(img_rgb, shape)
+            for pt in shape.parts():
+                cv2.circle(img, (pt.x, pt.y), 2, (0, 255, 255), -1)
+
+            current_time = time.time()
+            if current_time - self.last_timestamp > self.prediction_interval:
+                full_features = np.concatenate([
+                    embedding.cpu().numpy().squeeze(),
+                    landmark_features,
+                    race_onehot,
+                    gender_onehot,
+                    age_onehot
+                ]).reshape(1, -1)
+                self.last_prediction = xgb_model.predict(full_features)[0]
+                self.last_timestamp = current_time
+
+            if self.last_prediction is not None:
+                cv2.putText(img, f"BMI: {self.last_prediction:.2f}", (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
+
+            #cv2.putText(img, f"Race: {race_labels[race_idx]}", (x1, y2 + 20),
+            #            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            #cv2.putText(img, f"Gender: {gender_labels[gender_idx]}", (x1, y2 + 40),
+            #            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            #cv2.putText(img, f"Age: {age_labels[age_idx]}", (x1, y2 + 60),
+            #            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+
+            return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+    webrtc_streamer(
+        key="bmi-live-interval",
+        video_processor_factory=FaceAndBMIPredictor,
+        media_stream_constraints={"video": True, "audio": False},
+        async_processing=True
+    )
