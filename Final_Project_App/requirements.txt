@@ -8,4 +8,4 @@ numpy==1.26.4
 Pillow==10.2.0
 joblib==1.5.1
 av==14.4.0
-mediapipe==0.10.9
+mediapipe==0.10.21
