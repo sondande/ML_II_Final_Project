@@ -213,7 +213,7 @@ else:
         video_processor_factory=FaceAndBMIPredictor,
         media_stream_constraints={"video": True, "audio": False},
         async_processing=False,
-        rtc_configuration={  # Add this line
+        rtc_configuration={
             "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
         }
     )
